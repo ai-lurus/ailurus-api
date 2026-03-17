@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ceo
+  admin
+  developer
+  designer
+  client
+}
+
+enum ProjectType {
+  external
+  internal
+}
+
+enum ProjectStatus {
+  on_track
+  at_risk
+  delayed
+  completed
+}
+
+enum GoalStatus {
+  pending
+  in_progress
+  completed
+}
+
+enum SprintStatus {
+  planned
+  active
+  completed
+}
+
+enum MilestoneStatus {
+  pending
+  completed
+}
+
+enum TaskCategory {
+  engineering
+  design
+  marketing
+  other
+}
+
+enum TaskStatus {
+  backlog
+  ready
+  in_progress
+  blocked
+  in_review
+  done
+}
+
+enum Mood {
+  great
+  good
+  okay
+  struggling
+}
+
+enum TrainingStatus {
+  active
+  completed
+  paused
+}
+
+enum ResourceType {
+  video
+  article
+  course
+  practice
+}
+
+enum TopicStatus {
+  pending
+  in_progress
+  completed
+}
+
+enum ReportType {
+  daily_dev
+  daily_project
+  sprint
+  demo
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  teamMembers        TeamMember[]
+  assignedTasks      Task[]
+  reviewedTasks      Task[]             @relation("TaskReviewer")
+  developerProfile   DeveloperProfile?
+  dailyStatuses      DailyStatus[]
+  trainingPaths      TrainingPath[]
+  assignedPaths      TrainingPath[]     @relation("AssignedByUser")
+  reports            Report[]
+  googleIntegration  GoogleIntegration?
+
+  oneOnOneNotesAsSubject      OneOnOneNote[]      @relation("NoteSubject")
+  oneOnOneNotesAsAuthor       OneOnOneNote[]      @relation("NoteAuthor")
+  performanceReviewsAsSubject PerformanceReview[] @relation("ReviewSubject")
+  performanceReviewsAsAuthor  PerformanceReview[] @relation("ReviewAuthor")
+
+  @@map("users")
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project     Project      @relation(fields: [projectId], references: [id])
+  teamMembers TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String @id @default(uuid())
+  teamId String @map("team_id")
+  userId String @map("user_id")
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("team_members")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  type        ProjectType
+  status      ProjectStatus @default(on_track)
+  budget      Decimal?
+  deadline    DateTime?
+  clientName  String?       @map("client_name")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  teams       Team[]
+  goals       Goal[]
+  sprints     Sprint[]
+  milestones  RoadmapMilestone[]
+  tasks       Task[]
+  reports     Report[]
+  driveFolder ProjectDriveFolder?
+
+  @@map("projects")
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  projectId   String     @map("project_id")
+  title       String
+  description String?
+  deadline    DateTime?
+  status      GoalStatus @default(pending)
+
+  project Project @relation(fields: [projectId], references: [id])
+  tasks   Task[]
+
+  @@map("goals")
+}
+
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String       @map("project_id")
+  name      String
+  startDate DateTime     @map("start_date")
+  endDate   DateTime     @map("end_date")
+  status    SprintStatus @default(planned)
+
+  project    Project            @relation(fields: [projectId], references: [id])
+  milestones RoadmapMilestone[]
+  tasks      Task[]
+
+  @@map("sprints")
+}
+
+model RoadmapMilestone {
+  id        String          @id @default(uuid())
+  projectId String          @map("project_id")
+  sprintId  String?         @map("sprint_id")
+  title     String
+  dueDate   DateTime        @map("due_date")
+  status    MilestoneStatus @default(pending)
+
+  project Project @relation(fields: [projectId], references: [id])
+  sprint  Sprint? @relation(fields: [sprintId], references: [id])
+
+  @@map("roadmap_milestones")
+}
+
+model Task {
+  id           String       @id @default(uuid())
+  projectId    String       @map("project_id")
+  sprintId     String?      @map("sprint_id")
+  goalId       String?      @map("goal_id")
+  assignedTo   String?      @map("assigned_to")
+  title        String
+  description  String?
+  category     TaskCategory @default(engineering)
+  status       TaskStatus   @default(backlog)
+  storyPoints  Int?         @map("story_points")
+  estimatedHrs Decimal?     @map("estimated_hrs")
+  prLink       String?      @map("pr_link")
+  reviewedBy   String?      @map("reviewed_by")
+  reviewedAt   DateTime?    @map("reviewed_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  project  Project @relation(fields: [projectId], references: [id])
+  sprint   Sprint? @relation(fields: [sprintId], references: [id])
+  goal     Goal?   @relation(fields: [goalId], references: [id])
+  assignee User?   @relation(fields: [assignedTo], references: [id])
+  reviewer User?   @relation("TaskReviewer", fields: [reviewedBy], references: [id])
+
+  @@map("tasks")
+}
+
+model DeveloperProfile {
+  id                 String @id @default(uuid())
+  userId             String @unique @map("user_id")
+  skills             String[]
+  weeklyCapacityHrs  Int?   @map("weekly_capacity_hrs")
+  bio                String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("developer_profiles")
+}
+
+model DailyStatus {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  date            DateTime  @db.Date
+  mood            Mood
+  availableHrs    Decimal?  @map("available_hrs")
+  appointments    String?
+  blockers        String?
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  eodMood         Mood?     @map("eod_mood")
+  eodCompleted    String?   @map("eod_completed")
+  eodBlockers     String?   @map("eod_blockers")
+  eodNotes        String?   @map("eod_notes")
+  eodSubmittedAt  DateTime? @map("eod_submitted_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@map("daily_status")
+}
+
+model TrainingPath {
+  id            String         @id @default(uuid())
+  userId        String         @map("user_id")
+  skill         String
+  resources     Json?
+  progressPct   Int            @default(0) @map("progress_pct")
+  status        TrainingStatus @default(active)
+  title         String         @default("")
+  careerPath    String?        @map("career_path")
+  description   String?
+  assignedBy    String?        @map("assigned_by")
+  generatedByAI Boolean        @default(false) @map("generated_by_ai")
+  dueDate       DateTime?      @map("due_date")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id])
+  assignedByUser User?           @relation("AssignedByUser", fields: [assignedBy], references: [id])
+  topics         LearningTopic[]
+
+  @@map("training_paths")
+}
+
+model LearningTopic {
+  id             String       @id @default(uuid())
+  trainingPathId String       @map("training_path_id")
+  title          String
+  description    String?
+  resourceUrl    String?      @map("resource_url")
+  resourceType   ResourceType @default(article) @map("resource_type")
+  orderIndex     Int          @map("order_index")
+  dueDate        DateTime?    @map("due_date")
+  status         TopicStatus  @default(pending)
+  completedAt    DateTime?    @map("completed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  trainingPath TrainingPath @relation(fields: [trainingPathId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingPathId, orderIndex])
+  @@map("learning_topics")
+}
+
+model Report {
+  id        String     @id @default(uuid())
+  type      ReportType
+  projectId String?    @map("project_id")
+  userId    String?    @map("user_id")
+  content   Json
+  createdAt DateTime   @default(now()) @map("created_at")
+  driveUrl  String?    @map("drive_url")
+
+  project Project? @relation(fields: [projectId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+
+  @@map("reports")
+}
+
+model GoogleIntegration {
+  id           String    @id @default(uuid())
+  userId       String    @unique @map("user_id")
+  accessToken  String    @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  tokenExpiry  DateTime  @map("token_expiry")
+  scope        String
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_integrations")
+}
+
+model ProjectDriveFolder {
+  id        String   @id @default(uuid())
+  projectId String   @unique @map("project_id")
+  folderId  String   @map("folder_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_drive_folders")
+}
+
+model OneOnOneNote {
+  id           String   @id @default(uuid())
+  subjectId    String   @map("subject_id")
+  authorId     String   @map("author_id")
+  sessionDate  DateTime @map("session_date") @db.Date
+  notes        String
+  strengths    String?
+  improvements String?
+  agreements   String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  subject User @relation("NoteSubject", fields: [subjectId], references: [id])
+  author  User @relation("NoteAuthor",  fields: [authorId],  references: [id])
+
+  @@map("one_on_one_notes")
+}
+
+model PerformanceReview {
+  id               String   @id @default(uuid())
+  subjectId        String   @map("subject_id")
+  authorId         String   @map("author_id")
+  periodLabel      String   @map("period_label")
+  periodStart      DateTime @map("period_start") @db.Date
+  periodEnd        DateTime @map("period_end")   @db.Date
+  ratingTechnical  Int?     @map("rating_technical")
+  ratingComms      Int?     @map("rating_comms")
+  ratingAutonomy   Int?     @map("rating_autonomy")
+  ratingTeamwork   Int?     @map("rating_teamwork")
+  overallRating    Int?     @map("overall_rating")
+  summary          String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  subject User @relation("ReviewSubject", fields: [subjectId], references: [id])
+  author  User @relation("ReviewAuthor",  fields: [authorId],  references: [id])
+
+  @@map("performance_reviews")
+}
