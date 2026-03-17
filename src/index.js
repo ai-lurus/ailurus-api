@@ -73,6 +73,7 @@ app.use((err, _req, res, _next) => {
 
   // Prisma known errors (client validation, not found, etc.)
   if (err.code?.startsWith('P')) {
+    console.error('[prisma]', err.code, err.message)
     return res.status(400).json({ error: 'Database operation failed.', ...(isDev && { detail: err.message }) })
   }
 
