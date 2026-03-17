@@ -2,6 +2,10 @@ import './lib/env.js'
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 import { classifyAnthropicError } from './lib/anthropicErrors.js'
 import authRouter from './routes/auth.js'
@@ -17,6 +21,7 @@ import reportsRouter from './routes/reports.js'
 import goalsRouter from './routes/goals.js'
 import integrationsRouter from './routes/integrations.js'
 import learningRouter from './routes/learning.js'
+import battlesRouter from './routes/battles.js'
 import oneOnOnesRouter from './routes/oneOnOnes.js'
 import performanceReviewsRouter from './routes/performanceReviews.js'
 
@@ -27,6 +32,7 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000'
 app.use(cors({ origin: CLIENT_URL, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
+app.use('/public', express.static(path.join(__dirname, '../public')))
 app.use((req, _res, next) => {
   console.log(`→ ${req.method} ${req.path}`)
   next()
@@ -46,6 +52,7 @@ app.use('/api/reports', reportsRouter)
 app.use('/api/goals', goalsRouter)
 app.use('/api/integrations', integrationsRouter)
 app.use('/api/learning', learningRouter)
+app.use('/api/battles', battlesRouter)
 app.use('/api/one-on-ones', oneOnOnesRouter)
 app.use('/api/performance-reviews', performanceReviewsRouter)
 

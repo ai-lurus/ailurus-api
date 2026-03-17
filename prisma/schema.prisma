@@ -117,6 +117,11 @@ model User {
   performanceReviewsAsSubject PerformanceReview[] @relation("ReviewSubject")
   performanceReviewsAsAuthor  PerformanceReview[] @relation("ReviewAuthor")
 
+  avatarConfig         AvatarConfig?
+  createdBattlePaths   BattleLearningPath[] @relation("PathCreator")
+  assignedBattlePaths  UserBattlePath[]
+  battleProgress       UserBattleProgress[]
+
   @@map("users")
 }
 
@@ -369,6 +374,128 @@ model OneOnOneNote {
   author  User @relation("NoteAuthor",  fields: [authorId],  references: [id])
 
   @@map("one_on_one_notes")
+}
+
+// ── Learning Battles ──────────────────────────────────────────────────────────
+
+model AvatarConfig {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  body           String   @default("round")
+  head           String   @default("round")
+  primaryColor   String   @default("#6366f1") @map("primary_color")
+  secondaryColor String   @default("#a5b4fc") @map("secondary_color")
+  accentColor    String   @default("#fbbf24") @map("accent_color")
+  accessory      String   @default("none")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("avatar_configs")
+}
+
+model EnemyImage {
+  id         String   @id @default(uuid())
+  filename   String   @unique
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  battleProgress UserBattleProgress[]
+
+  @@map("enemy_images")
+}
+
+model BattleTopic {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  icon        String   @default("📚")
+  orderIndex  Int      @map("order_index")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  battles      BattleFight[]
+  pathTopics   BattlePathTopic[]
+  userProgress UserBattleProgress[]
+
+  @@map("battle_topics")
+}
+
+model BattleFight {
+  id            String   @id @default(uuid())
+  topicId       String   @map("topic_id")
+  title         String
+  order         Int
+  questionsJson Json     @map("questions_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  topic    BattleTopic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  progress UserBattleProgress[]
+
+  @@unique([topicId, order])
+  @@map("battle_fights")
+}
+
+model BattleLearningPath {
+  id        String   @id @default(uuid())
+  title     String
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creator   User              @relation("PathCreator", fields: [createdBy], references: [id])
+  topics    BattlePathTopic[]
+  userPaths UserBattlePath[]
+
+  @@map("battle_learning_paths")
+}
+
+model BattlePathTopic {
+  id         String @id @default(uuid())
+  pathId     String @map("path_id")
+  topicId    String @map("topic_id")
+  orderIndex Int    @map("order_index")
+
+  path  BattleLearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  topic BattleTopic        @relation(fields: [topicId], references: [id])
+
+  @@unique([pathId, topicId])
+  @@map("battle_path_topics")
+}
+
+model UserBattlePath {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  pathId     String   @map("path_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  path BattleLearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pathId])
+  @@map("user_battle_paths")
+}
+
+model UserBattleProgress {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  topicId       String    @map("topic_id")
+  battleId      String    @map("battle_id")
+  enemyImageId  String?   @map("enemy_image_id")
+  completed     Boolean   @default(false)
+  score         Int       @default(0)
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic      BattleTopic @relation(fields: [topicId], references: [id])
+  battle     BattleFight @relation(fields: [battleId], references: [id])
+  enemyImage EnemyImage? @relation(fields: [enemyImageId], references: [id])
+
+  @@unique([userId, battleId])
+  @@map("user_battle_progress")
 }
 
 model PerformanceReview {
