@@ -10,12 +10,14 @@ const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 const VALID_ROLES = ['ceo', 'admin', 'developer', 'client']
 
+const isProd = process.env.NODE_ENV === 'production'
+
 function setCookieToken(res, payload) {
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: COOKIE_MAX_AGE,
   })
   return token
@@ -94,8 +96,8 @@ router.post('/login', async (req, res) => {
 router.post('/logout', (_req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
   })
   return res.json({ message: 'Logged out successfully.' })
 })
