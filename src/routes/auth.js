@@ -12,8 +12,12 @@ const VALID_ROLES = ['ceo', 'admin', 'developer', 'client']
 
 const isProd = process.env.NODE_ENV === 'production'
 
+function generateToken(payload) {
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
+}
+
 function setCookieToken(res, payload) {
-  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
+  const token = generateToken(payload)
   res.cookie('token', token, {
     httpOnly: true,
     secure: isProd,
@@ -51,9 +55,9 @@ router.post('/register', async (req, res) => {
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   })
 
-  setCookieToken(res, { id: user.id, email: user.email, role: user.role })
+  const token = setCookieToken(res, { id: user.id, email: user.email, role: user.role })
 
-  return res.status(201).json({ user })
+  return res.status(201).json({ user, token })
 })
 
 // POST /api/auth/login
@@ -79,9 +83,10 @@ router.post('/login', async (req, res) => {
     return res.status(403).json({ error: 'Your account has been deactivated. Contact an administrator.' })
   }
 
-  setCookieToken(res, { id: user.id, email: user.email, role: user.role })
+  const token = setCookieToken(res, { id: user.id, email: user.email, role: user.role })
 
   return res.json({
+    token,
     user: {
       id: user.id,
       name: user.name,
