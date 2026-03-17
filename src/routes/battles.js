@@ -403,6 +403,56 @@ router.get('/my-paths', requireAuth, async (req, res) => {
   return res.json({ paths })
 })
 
+// GET /api/battles/users/:userId/progress (admin) — progress for any user
+router.get('/users/:userId/progress', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
+  const { userId } = req.params
+
+  const userExists = await prisma.user.findUnique({ where: { id: userId } })
+  if (!userExists) return res.status(404).json({ error: 'User not found.' })
+
+  const userPaths = await prisma.userBattlePath.findMany({
+    where: { userId },
+    include: {
+      path: {
+        include: {
+          topics: {
+            orderBy: { orderIndex: 'asc' },
+            include: {
+              topic: {
+                include: {
+                  battles: { orderBy: { order: 'asc' }, select: { id: true, title: true, order: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  const allBattleIds = userPaths.flatMap((up) =>
+    up.path.topics.flatMap((pt) => pt.topic.battles.map((b) => b.id))
+  )
+
+  const progress = await prisma.userBattleProgress.findMany({
+    where: { userId, battleId: { in: allBattleIds } },
+  })
+  const progressByBattleId = Object.fromEntries(progress.map((p) => [p.battleId, p]))
+
+  const paths = userPaths.map((up) => ({
+    ...up.path,
+    topics: up.path.topics.map((pt) => ({
+      ...pt.topic,
+      battles: pt.topic.battles.map((b) => ({
+        ...b,
+        progress: progressByBattleId[b.id] ?? null,
+      })),
+    })),
+  }))
+
+  return res.json({ paths })
+})
+
 // GET /api/battles/topics/:topicId/detail — full topic with questions for user
 router.get('/topics/:topicId/detail', requireAuth, async (req, res) => {
   const topic = await prisma.battleTopic.findUnique({
