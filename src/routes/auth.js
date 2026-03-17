@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import prisma from '../lib/prisma.js'
+import prisma, { withRetry } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
@@ -68,7 +68,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' })
   }
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const user = await withRetry(() => prisma.user.findUnique({ where: { email } }))
 
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password.' })
