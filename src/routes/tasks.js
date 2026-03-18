@@ -171,7 +171,7 @@ router.get('/', requireAuth, async (req, res) => {
 })
 
 // ─── POST /api/tasks ──────────────────────────────────────────────────────────
-router.post('/', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   const {
     projectId,
     sprintId,
@@ -194,9 +194,22 @@ router.post('/', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
     })
   }
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } })
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { teams: { include: { teamMembers: { select: { userId: true } } } } },
+  })
   if (!project) {
     return res.status(404).json({ error: 'Project not found.' })
+  }
+
+  // Developers and designers can only create tickets in their own projects
+  if (['developer', 'designer'].includes(req.user.role)) {
+    const isMember = project.teams.some((team) =>
+      team.teamMembers.some((m) => m.userId === req.user.id)
+    )
+    if (!isMember) {
+      return res.status(403).json({ error: 'You can only create tickets in projects you belong to.' })
+    }
   }
 
   const task = await prisma.task.create({
