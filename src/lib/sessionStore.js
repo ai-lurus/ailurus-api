@@ -14,19 +14,19 @@
 
 const store = new Map()
 
-function sessionKey(userId) {
-  const today = new Date().toISOString().slice(0, 10)
-  return `${userId}:${today}`
+function sessionKey(userId, date) {
+  const d = date ?? new Date().toISOString().slice(0, 10)
+  return `${userId}:${d}`
 }
 
-export function getSession(userId) {
-  return store.get(sessionKey(userId)) ?? null
+export function getSession(userId, date) {
+  return store.get(sessionKey(userId, date)) ?? null
 }
 
-export function setSession(userId, context) {
-  store.set(sessionKey(userId), context)
+export function setSession(userId, context, date) {
+  store.set(sessionKey(userId, date), context)
 }
 
-export function clearSession(userId) {
-  store.delete(sessionKey(userId))
+export function clearSession(userId, date) {
+  store.delete(sessionKey(userId, date))
 }

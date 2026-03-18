@@ -12,11 +12,11 @@ const router = Router()
 // Fetches and caches the developer's daily context (user info, check-in, tasks).
 // Cached per userId per day so repeated chat turns don't re-hit the DB.
 
-async function loadContext(userId) {
-  const cached = getSession(userId)
+async function loadContext(userId, date) {
+  const cached = getSession(userId, date)
   if (cached) return cached
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = date ?? new Date().toISOString().slice(0, 10)
   const todayUtc = new Date(today + 'T00:00:00.000Z')
 
   const [user, dailyStatus, tasks] = await Promise.all([
@@ -49,7 +49,7 @@ async function loadContext(userId) {
   ])
 
   const context = { user, dailyStatus, tasks }
-  setSession(userId, context)
+  setSession(userId, context, date)
   return context
 }
 
@@ -134,14 +134,15 @@ router.post(
 
     // messages is the full conversation history from the client.
     // Each item: { role: 'user' | 'assistant', content: string }
-    const { messages } = req.body
+    // date is the user's local date (YYYY-MM-DD) sent by the client to avoid UTC mismatch.
+    const { messages, date } = req.body
 
     if (!Array.isArray(messages)) {
       return res.status(400).json({ error: 'messages array is required.' })
     }
 
     // ── Load context (cached after first turn) ────────────────────────────
-    const context = await loadContext(userId)
+    const context = await loadContext(userId, date)
 
     if (!context.user) {
       return res.status(404).json({ error: 'User not found.' })
