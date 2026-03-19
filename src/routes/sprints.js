@@ -37,7 +37,7 @@ router.get('/', requireAuth, async (req, res) => {
 
 // ─── POST /api/sprints ────────────────────────────────────────────────────────
 router.post('/', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
-  const { projectId, name, startDate, endDate } = req.body
+  const { projectId, name, startDate, endDate, objective } = req.body
 
   if (!projectId || !name || !startDate || !endDate) {
     return res.status(400).json({ error: 'projectId, name, startDate, and endDate are required.' })
@@ -63,6 +63,7 @@ router.post('/', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
     data: {
       projectId,
       name,
+      objective: objective || null,
       startDate: start,
       endDate: end,
     },
@@ -100,7 +101,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // ─── PUT /api/sprints/:id ─────────────────────────────────────────────────────
 router.put('/:id', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
-  const { name, startDate, endDate, status } = req.body
+  const { name, startDate, endDate, status, objective } = req.body
 
   if (status && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({
@@ -136,6 +137,7 @@ router.put('/:id', requireAuth, requireRole('admin', 'ceo'), async (req, res) =>
       ...(start && { startDate: start }),
       ...(end && { endDate: end }),
       ...(status && { status }),
+      ...('objective' in req.body && { objective: objective || null }),
     },
     include: {
       milestones: { orderBy: { dueDate: 'asc' } },
@@ -144,6 +146,23 @@ router.put('/:id', requireAuth, requireRole('admin', 'ceo'), async (req, res) =>
   })
 
   return res.json({ sprint })
+})
+
+// ─── DELETE /api/sprints/:id ──────────────────────────────────────────────────
+router.delete('/:id', requireAuth, requireRole('admin', 'ceo'), async (req, res) => {
+  const existing = await prisma.sprint.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    return res.status(404).json({ error: 'Sprint not found.' })
+  }
+
+  // Unlink tasks from this sprint before deleting
+  await prisma.task.updateMany({
+    where: { sprintId: req.params.id },
+    data: { sprintId: null },
+  })
+
+  await prisma.sprint.delete({ where: { id: req.params.id } })
+  return res.json({ ok: true })
 })
 
 export default router

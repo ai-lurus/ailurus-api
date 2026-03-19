@@ -188,6 +188,7 @@ model Sprint {
   id        String       @id @default(uuid())
   projectId String       @map("project_id")
   name      String
+  objective String?
   startDate DateTime     @map("start_date")
   endDate   DateTime     @map("end_date")
   status    SprintStatus @default(planned)
