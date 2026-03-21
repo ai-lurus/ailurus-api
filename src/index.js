@@ -24,6 +24,7 @@ import learningRouter from './routes/learning.js'
 import battlesRouter from './routes/battles.js'
 import oneOnOnesRouter from './routes/oneOnOnes.js'
 import performanceReviewsRouter from './routes/performanceReviews.js'
+import documentsRouter from './routes/documents.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -55,6 +56,7 @@ app.use('/api/learning', learningRouter)
 app.use('/api/battles', battlesRouter)
 app.use('/api/one-on-ones', oneOnOnesRouter)
 app.use('/api/performance-reviews', performanceReviewsRouter)
+app.use('/api/documents', documentsRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
