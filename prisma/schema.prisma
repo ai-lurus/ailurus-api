@@ -105,6 +105,7 @@ model User {
   teamMembers        TeamMember[]
   assignedTasks      Task[]
   reviewedTasks      Task[]             @relation("TaskReviewer")
+  taskComments       TaskComment[]
   developerProfile   DeveloperProfile?
   dailyStatuses      DailyStatus[]
   trainingPaths      TrainingPath[]
@@ -232,13 +233,27 @@ model Task {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  project  Project @relation(fields: [projectId], references: [id])
-  sprint   Sprint? @relation(fields: [sprintId], references: [id])
-  goal     Goal?   @relation(fields: [goalId], references: [id])
-  assignee User?   @relation(fields: [assignedTo], references: [id])
-  reviewer User?   @relation("TaskReviewer", fields: [reviewedBy], references: [id])
+  project  Project       @relation(fields: [projectId], references: [id])
+  sprint   Sprint?       @relation(fields: [sprintId], references: [id])
+  goal     Goal?         @relation(fields: [goalId], references: [id])
+  assignee User?         @relation(fields: [assignedTo], references: [id])
+  reviewer User?         @relation("TaskReviewer", fields: [reviewedBy], references: [id])
+  comments TaskComment[]
 
   @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("task_comments")
 }
 
 model DeveloperProfile {

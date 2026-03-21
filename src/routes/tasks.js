@@ -284,4 +284,46 @@ router.put('/:id', requireAuth, async (req, res) => {
   return res.json({ task })
 })
 
+// ─── GET /api/tasks/:id/comments ─────────────────────────────────────────────
+router.get('/:id/comments', requireAuth, async (req, res, next) => {
+  try {
+    const task = await prisma.task.findUnique({ where: { id: req.params.id } })
+    if (!task) return res.status(404).json({ error: 'Task not found.' })
+
+    const comments = await prisma.taskComment.findMany({
+      where: { taskId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+      include: { author: { select: { id: true, name: true } } },
+    })
+
+    return res.json({ comments })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /api/tasks/:id/comments ────────────────────────────────────────────
+router.post('/:id/comments', requireAuth, async (req, res, next) => {
+  try {
+    const { body } = req.body
+    if (!body?.trim()) return res.status(400).json({ error: 'body is required.' })
+
+    const task = await prisma.task.findUnique({ where: { id: req.params.id } })
+    if (!task) return res.status(404).json({ error: 'Task not found.' })
+
+    const comment = await prisma.taskComment.create({
+      data: {
+        taskId:   req.params.id,
+        authorId: req.user.id,
+        body:     body.trim(),
+      },
+      include: { author: { select: { id: true, name: true } } },
+    })
+
+    return res.status(201).json({ comment })
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router
