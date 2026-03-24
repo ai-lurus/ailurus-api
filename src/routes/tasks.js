@@ -133,7 +133,9 @@ router.get('/backlog', requireAuth, async (req, res) => {
 
 // ─── GET /api/tasks ───────────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res) => {
-  const { projectId, sprintId, assignedTo, status } = req.query
+  const { projectId, sprintId, assignedTo, status, take, skip } = req.query
+  const pageSize = Math.min(parseInt(take) || 200, 500)
+  const pageOffset = Math.max(parseInt(skip) || 0, 0)
 
   const where = {}
   if (projectId) where.projectId = projectId
@@ -158,6 +160,8 @@ router.get('/', requireAuth, async (req, res) => {
   const tasks = await prisma.task.findMany({
     where,
     orderBy: { createdAt: 'desc' },
+    take: pageSize,
+    skip: pageOffset,
     include: {
       assignee: { select: { id: true, name: true, role: true } },
       reviewer: { select: { id: true, name: true } },

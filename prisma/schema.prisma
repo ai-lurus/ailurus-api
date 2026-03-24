@@ -251,6 +251,13 @@ model Task {
   reviewer User?         @relation("TaskReviewer", fields: [reviewedBy], references: [id])
   comments TaskComment[]
 
+  @@index([projectId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([sprintId])
+  @@index([projectId, status])
+  @@index([assignedTo, status])
+  @@index([updatedAt])
   @@map("tasks")
 }
 
@@ -322,6 +329,7 @@ model TrainingPath {
   assignedByUser User?           @relation("AssignedByUser", fields: [assignedBy], references: [id])
   topics         LearningTopic[]
 
+  @@index([userId])
   @@map("training_paths")
 }
 
@@ -522,6 +530,7 @@ model UserBattleProgress {
   enemyImage EnemyImage? @relation(fields: [enemyImageId], references: [id])
 
   @@unique([userId, battleId])
+  @@index([userId, topicId])
   @@map("user_battle_progress")
 }
 

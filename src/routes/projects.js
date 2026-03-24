@@ -173,11 +173,26 @@ router.get('/:id/dashboard', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Project not found.' })
   }
 
-  // Active sprint + its tasks
-  const activeSprint = await prisma.sprint.findFirst({
-    where: { projectId: project.id, status: 'active' },
-    include: { tasks: true },
-  })
+  // Run all three queries in parallel
+  const [activeSprint, openBlockers, taskCounts] = await Promise.all([
+    prisma.sprint.findFirst({
+      where: { projectId: project.id, status: 'active' },
+      include: { tasks: true },
+    }),
+    prisma.task.findMany({
+      where: { projectId: project.id, status: 'blocked' },
+      select: {
+        id: true,
+        title: true,
+        assignee: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.task.groupBy({
+      by: ['status'],
+      where: { projectId: project.id },
+      _count: { status: true },
+    }),
+  ])
 
   // Sprint velocity: story points of done tasks in the active sprint
   const sprintVelocity = activeSprint
@@ -189,23 +204,6 @@ router.get('/:id/dashboard', requireAuth, async (req, res) => {
   const totalSprintPoints = activeSprint
     ? activeSprint.tasks.reduce((sum, t) => sum + (t.storyPoints ?? 0), 0)
     : 0
-
-  // Open blockers across the whole project
-  const openBlockers = await prisma.task.findMany({
-    where: { projectId: project.id, status: 'blocked' },
-    select: {
-      id: true,
-      title: true,
-      assignee: { select: { id: true, name: true } },
-    },
-  })
-
-  // Task status breakdown
-  const taskCounts = await prisma.task.groupBy({
-    by: ['status'],
-    where: { projectId: project.id },
-    _count: { status: true },
-  })
 
   const taskBreakdown = Object.fromEntries(
     taskCounts.map(({ status, _count }) => [status, _count.status])

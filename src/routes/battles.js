@@ -205,20 +205,23 @@ router.post('/topics/:id/battles', requireAuth, requireRole('admin', 'ceo'), asy
     }
   }
 
-  // Delete existing battles and recreate
-  await prisma.battleFight.deleteMany({ where: { topicId: req.params.id } })
-  const created = await Promise.all(
-    battles.map((b, i) =>
-      prisma.battleFight.create({
-        data: {
-          topicId: req.params.id,
-          title: b.title.trim(),
-          order: i + 1,
-          questionsJson: b.questions,
-        },
-      })
-    )
-  )
+  // Delete existing battles and recreate atomically
+  await prisma.$transaction(async (tx) => {
+    await tx.battleFight.deleteMany({ where: { topicId: req.params.id } })
+    await tx.battleFight.createMany({
+      data: battles.map((b, i) => ({
+        topicId: req.params.id,
+        title: b.title.trim(),
+        order: i + 1,
+        questionsJson: b.questions,
+      })),
+    })
+  })
+
+  const created = await prisma.battleFight.findMany({
+    where: { topicId: req.params.id },
+    orderBy: { order: 'asc' },
+  })
 
   return res.status(201).json({ battles: created })
 })
