@@ -58,6 +58,7 @@ enum TaskStatus {
   blocked
   in_review
   done
+  cancelled
 }
 
 enum Mood {

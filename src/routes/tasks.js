@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = Router()
 
-const VALID_STATUSES = ['backlog', 'ready', 'in_progress', 'blocked', 'in_review', 'done']
+const VALID_STATUSES = ['backlog', 'ready', 'in_progress', 'blocked', 'in_review', 'done', 'cancelled']
 const VALID_CATEGORIES = ['engineering', 'design', 'marketing', 'other']
 
 // ─── GET /api/tasks/today-activity ───────────────────────────────────────────
@@ -186,6 +186,7 @@ router.post('/', requireAuth, async (req, res) => {
     category,
     storyPoints,
     estimatedHrs,
+    status,
   } = req.body
 
   if (!projectId || !title) {
@@ -195,6 +196,12 @@ router.post('/', requireAuth, async (req, res) => {
   if (category && !VALID_CATEGORIES.includes(category)) {
     return res.status(400).json({
       error: `Invalid category. Must be one of: ${VALID_CATEGORIES.join(', ')}.`,
+    })
+  }
+
+  if (status && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({
+      error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}.`,
     })
   }
 
@@ -227,6 +234,7 @@ router.post('/', requireAuth, async (req, res) => {
       category: category || 'engineering',
       storyPoints: storyPoints ? parseInt(storyPoints) : null,
       estimatedHrs: estimatedHrs ? parseFloat(estimatedHrs) : null,
+      ...(status && { status }),
     },
     include: {
       assignee: { select: { id: true, name: true } },
@@ -239,18 +247,26 @@ router.post('/', requireAuth, async (req, res) => {
 
 // ─── PUT /api/tasks/:id ───────────────────────────────────────────────────────
 router.put('/:id', requireAuth, async (req, res) => {
-  const { status, assignedTo, storyPoints, estimatedHrs, title, description, sprintId, prLink } = req.body
+  const { status, assignedTo, storyPoints, estimatedHrs, title, description, sprintId, prLink, projectId } = req.body
 
   const existing = await prisma.task.findUnique({ where: { id: req.params.id } })
   if (!existing) {
     return res.status(404).json({ error: 'Task not found.' })
   }
 
-  // Developers/designers can only update their own tasks, EXCEPT approving in_review tasks
+  if (projectId && projectId !== existing.projectId) {
+    const project = await prisma.project.findUnique({ where: { id: projectId } })
+    if (!project) return res.status(404).json({ error: 'Project not found.' })
+  }
+
+  // Developers/designers can only update their own tasks, EXCEPT:
+  // - approving in_review tasks (marking done)
+  // - self-assigning an unassigned task
   if (['developer', 'designer'].includes(req.user.role)) {
+    const isOwnTask             = existing.assignedTo === req.user.id
     const isApprovingOthersTask = status === 'done' && existing.assignedTo !== req.user.id
-    const isOwnTask = existing.assignedTo === req.user.id
-    if (!isOwnTask && !isApprovingOthersTask) {
+    const isSelfAssigning       = existing.assignedTo === null && assignedTo === req.user.id
+    if (!isOwnTask && !isApprovingOthersTask && !isSelfAssigning) {
       return res.status(403).json({ error: 'You can only update tasks assigned to you.' })
     }
   }
@@ -275,6 +291,7 @@ router.put('/:id', requireAuth, async (req, res) => {
       ...(description !== undefined && { description }),
       ...(sprintId !== undefined && { sprintId: sprintId || null }),
       ...(prLink !== undefined && { prLink: prLink || null }),
+      ...(projectId && { projectId }),
       ...(isReviewApproval && { reviewedBy: req.user.id, reviewedAt: new Date() }),
     },
     include: {
