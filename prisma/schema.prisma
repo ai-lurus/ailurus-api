@@ -589,6 +589,7 @@ model Notification {
   type        NotificationType
   title       String
   description String?
+  link        String?
   read        Boolean          @default(false)
   createdAt   DateTime         @default(now()) @map("created_at")
 

@@ -1,8 +1,8 @@
 import prisma from '../lib/prisma.js'
 
-export async function createNotification(userId, { type, title, description }) {
+export async function createNotification(userId, { type, title, description, link }) {
   return prisma.notification.create({
-    data: { userId, type, title, description: description || null },
+    data: { userId, type, title, description: description || null, link: link || null },
   })
 }
 
@@ -12,6 +12,7 @@ export async function notifyTaskAssigned(task, actorName) {
     type: 'tarea',
     title: 'Nueva tarea asignada',
     description: `${actorName} te asignó "${task.title}"`,
+    link: '/admin/board',
   })
 }
 
@@ -21,6 +22,7 @@ export async function notifyTaskInReview(task, actorName) {
     type: 'mencion',
     title: 'Tu tarea fue enviada a revisión',
     description: `"${task.title}" está lista para revisión`,
+    link: '/admin/board',
   })
 }
 
@@ -30,6 +32,7 @@ export async function notifyTaskDone(task, actorName) {
     type: 'tarea',
     title: 'Tarea aprobada',
     description: `${actorName} aprobó "${task.title}"`,
+    link: '/admin/board',
   })
 }
 
@@ -39,6 +42,7 @@ export async function notifyCommentAdded(task, authorName) {
     type: 'mencion',
     title: 'Nuevo comentario en tu tarea',
     description: `${authorName} comentó en "${task.title}"`,
+    link: '/admin/board',
   })
 }
 
@@ -50,6 +54,7 @@ export async function notifyMentioned(task, comment, authorName, mentionedUserId
         type: 'mencion',
         title: `${authorName} te mencionó`,
         description: `En "${task.title}": ${comment.body.slice(0, 80)}${comment.body.length > 80 ? '…' : ''}`,
+        link: '/admin/board',
       })
     )
   )
@@ -63,6 +68,7 @@ export async function notifySprintActivated(sprint, teamUserIds) {
         type: 'sistema',
         title: 'Sprint iniciado',
         description: `"${sprint.name}" fue marcado como activo`,
+        link: '/admin/sprints',
       })
     )
   )
