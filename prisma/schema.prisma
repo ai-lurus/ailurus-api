@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -101,6 +102,12 @@ enum DocumentType {
   other
 }
 
+enum NotificationType {
+  mencion
+  tarea
+  sistema
+}
+
 model User {
   id           String   @id @default(uuid())
   name         String
@@ -133,6 +140,7 @@ model User {
 
   createdDocuments  ProjectDocument[] @relation("DocumentCreator")
   editedDocuments   ProjectDocument[] @relation("DocumentEditor")
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -573,4 +581,20 @@ model PerformanceReview {
   author  User @relation("ReviewAuthor",  fields: [authorId],  references: [id])
 
   @@map("performance_reviews")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  type        NotificationType
+  title       String
+  description String?
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

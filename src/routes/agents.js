@@ -8,7 +8,106 @@ import { classifyAnthropicError } from '../lib/anthropicErrors.js'
 
 const router = Router()
 
-// ─── Context loader ───────────────────────────────────────────────────────────
+const ADMIN_ROLES = ['admin', 'ceo']
+
+// ─── Admin context loader ─────────────────────────────────────────────────────
+
+async function loadAdminContext(userId, date) {
+  const cached = getSession(userId + ':admin', date)
+  if (cached) return cached
+
+  const [user, projects] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true },
+    }),
+
+    prisma.project.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        sprints: {
+          where: { status: 'active' },
+          select: {
+            id: true,
+            name: true,
+            endDate: true,
+            _count: { select: { tasks: true } },
+            tasks: {
+              select: { status: true },
+            },
+          },
+        },
+        tasks: {
+          select: { status: true },
+        },
+        teams: {
+          select: {
+            teamMembers: {
+              select: { user: { select: { id: true, name: true } } },
+            },
+          },
+        },
+      },
+    }),
+  ])
+
+  const context = { user, projects }
+  setSession(userId + ':admin', context, date)
+  return context
+}
+
+// ─── Admin system prompt builder ──────────────────────────────────────────────
+
+function buildAdminSystemPrompt({ user, projects }) {
+  const name = user?.name ?? 'the admin'
+
+  const projectLines = projects.length === 0
+    ? '  (no projects)'
+    : projects.map((p) => {
+        const totalTasks = p.tasks.length
+        const done = p.tasks.filter((t) => t.status === 'done').length
+        const blocked = p.tasks.filter((t) => t.status === 'blocked').length
+        const inProgress = p.tasks.filter((t) => t.status === 'in_progress').length
+
+        const activeSprints = p.sprints.map((s) => {
+          const daysLeft = Math.ceil((new Date(s.endDate) - new Date()) / 86400000)
+          const sprintDone = s.tasks.filter((t) => t.status === 'done').length
+          const sprintTotal = s.tasks.length
+          const pct = sprintTotal > 0 ? Math.round((sprintDone / sprintTotal) * 100) : 0
+          return `    → Sprint "${s.name}": ${pct}% done, ${daysLeft}d left, ${s.tasks.filter((t) => t.status === 'blocked').length} blocked`
+        }).join('\n')
+
+        const teamSize = p.teams.reduce((sum, t) => sum + t.teamMembers.length, 0)
+
+        return [
+          `  • ${p.name} [${p.status}] — ${teamSize} members, ${totalTasks} tasks (${inProgress} in progress, ${blocked} blocked, ${done} done)`,
+          activeSprints,
+        ].filter(Boolean).join('\n')
+      }).join('\n')
+
+  return `You are a strategic AI assistant for ${name}, a ${user?.role ?? 'leader'} at a software agency.
+Your role is to help them stay on top of team health, project progress, and strategic decisions.
+
+── Projects & Sprints ───────────────────────────────────
+${projectLines}
+─────────────────────────────────────────────────────────
+
+Guidelines:
+- Address ${name} by first name.
+- You have full visibility into all projects, sprints, and task breakdowns shown above.
+- Help identify risks: blocked tasks, overdue sprints, teams under pressure.
+- Offer strategic recommendations, not just status summaries.
+- When asked about a specific project or sprint, go deep with the data you have.
+- When the team needs help, suggest concrete next steps (unblock tasks, reassign, cut scope).
+- Keep your tone direct and professional — skip pleasantries, lead with insight.
+- Use bullet points for lists; keep prose tight.
+- Never be sycophantic. Don't repeat yourself across turns.`
+}
+
+// ─── Developer context loader ─────────────────────────────────────────────────
 // Fetches and caches the developer's daily context (user info, check-in, tasks).
 // Cached per userId per day so repeated chat turns don't re-hit the DB.
 
@@ -142,7 +241,10 @@ router.post(
     }
 
     // ── Load context (cached after first turn) ────────────────────────────
-    const context = await loadContext(userId, date)
+    const isAdmin = ADMIN_ROLES.includes(req.user.role)
+    const context = isAdmin
+      ? await loadAdminContext(userId, date)
+      : await loadContext(userId, date)
 
     if (!context.user) {
       return res.status(404).json({ error: 'User not found.' })
@@ -167,7 +269,7 @@ router.post(
     res.setHeader('Connection', 'keep-alive')
     res.flushHeaders()
 
-    const systemPrompt = buildSystemPrompt(context)
+    const systemPrompt = isAdmin ? buildAdminSystemPrompt(context) : buildSystemPrompt(context)
 
     // Guard against res.end() being called twice (once from stream 'error', once from catch)
     let streamEnded = false

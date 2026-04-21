@@ -55,7 +55,7 @@ router.post('/register', async (req, res) => {
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   })
 
-  const token = setCookieToken(res, { id: user.id, email: user.email, role: user.role })
+  const token = setCookieToken(res, { id: user.id, name: user.name, email: user.email, role: user.role })
 
   return res.status(201).json({ user, token })
 })
@@ -83,7 +83,7 @@ router.post('/login', async (req, res) => {
     return res.status(403).json({ error: 'Your account has been deactivated. Contact an administrator.' })
   }
 
-  const token = setCookieToken(res, { id: user.id, email: user.email, role: user.role })
+  const token = setCookieToken(res, { id: user.id, name: user.name, email: user.email, role: user.role })
 
   return res.json({
     token,

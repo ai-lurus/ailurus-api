@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
+import { notifyTaskAssigned, notifyTaskInReview, notifyTaskDone, notifyCommentAdded, notifyMentioned } from '../services/notificationService.js'
 
 const router = Router()
 
@@ -242,6 +243,10 @@ router.post('/', requireAuth, async (req, res) => {
     },
   })
 
+  if (task.assignedTo && task.assignedTo !== req.user.id) {
+    notifyTaskAssigned(task, req.user.name).catch(() => {})
+  }
+
   return res.status(201).json({ task })
 })
 
@@ -259,15 +264,13 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found.' })
   }
 
-  // Developers/designers can only update their own tasks, EXCEPT:
-  // - approving in_review tasks (marking done)
-  // - self-assigning an unassigned task
+  // Developers/designers can update any task in projects they belong to
   if (['developer', 'designer'].includes(req.user.role)) {
-    const isOwnTask             = existing.assignedTo === req.user.id
-    const isApprovingOthersTask = status === 'done' && existing.assignedTo !== req.user.id
-    const isSelfAssigning       = existing.assignedTo === null && assignedTo === req.user.id
-    if (!isOwnTask && !isApprovingOthersTask && !isSelfAssigning) {
-      return res.status(403).json({ error: 'You can only update tasks assigned to you.' })
+    const membership = await prisma.teamMember.findFirst({
+      where: { userId: req.user.id, team: { projectId: existing.projectId } },
+    })
+    if (!membership) {
+      return res.status(403).json({ error: 'You can only update tasks in projects you belong to.' })
     }
   }
 
@@ -302,6 +305,15 @@ router.put('/:id', requireAuth, async (req, res) => {
     },
   })
 
+  // Fire notifications (non-blocking)
+  if (status === 'in_review' && existing.status !== 'in_review') {
+    notifyTaskInReview({ ...task, reviewedBy: req.user.id }, req.user.name).catch(() => {})
+  } else if (status === 'done' && isReviewApproval) {
+    notifyTaskDone(task, req.user.name).catch(() => {})
+  } else if (assignedTo && assignedTo !== existing.assignedTo && assignedTo !== req.user.id) {
+    notifyTaskAssigned(task, req.user.name).catch(() => {})
+  }
+
   return res.json({ task })
 })
 
@@ -326,7 +338,7 @@ router.get('/:id/comments', requireAuth, async (req, res, next) => {
 // ─── POST /api/tasks/:id/comments ────────────────────────────────────────────
 router.post('/:id/comments', requireAuth, async (req, res, next) => {
   try {
-    const { body } = req.body
+    const { body, mentionedUserIds } = req.body
     if (!body?.trim()) return res.status(400).json({ error: 'body is required.' })
 
     const task = await prisma.task.findUnique({ where: { id: req.params.id } })
@@ -340,6 +352,18 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
       },
       include: { author: { select: { id: true, name: true } } },
     })
+
+    // Notify assignee (if not the author and not already mentioned)
+    const mentionedSet = new Set(Array.isArray(mentionedUserIds) ? mentionedUserIds : [])
+    if (task.assignedTo && task.assignedTo !== req.user.id && !mentionedSet.has(task.assignedTo)) {
+      notifyCommentAdded(task, req.user.name).catch(() => {})
+    }
+
+    // Notify mentioned users (excluding the author)
+    const toNotify = [...mentionedSet].filter((id) => id !== req.user.id)
+    if (toNotify.length) {
+      notifyMentioned(task, comment, req.user.name, toNotify).catch(() => {})
+    }
 
     return res.status(201).json({ comment })
   } catch (err) {

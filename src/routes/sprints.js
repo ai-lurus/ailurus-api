@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
+import { notifySprintActivated } from '../services/notificationService.js'
 
 const router = Router()
 
@@ -9,8 +10,9 @@ const VALID_STATUSES = ['planned', 'active', 'completed']
 // ─── GET /api/sprints ─────────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res) => {
   const { projectId, status } = req.query
+  const isAdmin = ['admin', 'ceo'].includes(req.user.role)
 
-  if (!projectId) {
+  if (!projectId && !isAdmin) {
     return res.status(400).json({ error: 'projectId query param is required.' })
   }
 
@@ -20,7 +22,8 @@ router.get('/', requireAuth, async (req, res) => {
     })
   }
 
-  const where = { projectId }
+  const where = {}
+  if (projectId) where.projectId = projectId
   if (status) where.status = status
 
   const sprints = await prisma.sprint.findMany({
@@ -144,6 +147,16 @@ router.put('/:id', requireAuth, requireRole('admin', 'ceo'), async (req, res) =>
       _count: { select: { tasks: true } },
     },
   })
+
+  if (status === 'active' && existing.status !== 'active') {
+    prisma.teamMember.findMany({
+      where: { team: { projectId: sprint.projectId } },
+      select: { userId: true },
+    }).then((members) => {
+      const ids = members.map((m) => m.userId)
+      notifySprintActivated(sprint, ids).catch(() => {})
+    }).catch(() => {})
+  }
 
   return res.json({ sprint })
 })

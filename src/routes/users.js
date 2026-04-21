@@ -7,6 +7,21 @@ const router = Router()
 
 const VALID_ROLES = ['ceo', 'admin', 'developer', 'designer', 'client']
 
+// ─── GET /api/users/mentionable ───────────────────────────────────────────────
+// Any authenticated user — minimal fields for @mention autocomplete
+router.get('/mentionable', requireAuth, async (req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, role: true },
+    })
+    res.json({ users })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── GET /api/users ───────────────────────────────────────────────────────────
 router.get('/', requireAuth, requireRole('admin', 'ceo'), async (req, res, next) => {
   try {
